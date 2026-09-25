@@ -1,0 +1,25 @@
+name: Build IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || true
+
+      - name: Build unsigned IPA
+        run: |
+          xcodebuild -version
+          chmod +x build-ipa.sh
+          ./build-ipa.sh Release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirCard-iOS-ipa
+          path: build/AirCard-iOS.ipa
