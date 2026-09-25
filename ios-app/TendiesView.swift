@@ -14,9 +14,25 @@ struct TendiesView: View {
     @State private var showFilePicker = false
     @State private var selectedDetailItem: TendieItem? = nil
     @State private var isNeoSpringing = false
+    @State private var pendingDeleteIDs: Set<UUID> = []
+    @State private var showDeleteConfirm = false
 
     private var selectedCount: Int {
         vm.tendieItems.filter { $0.isSelected }.count
+    }
+
+    private var deleteConfirmTitle: String {
+        if pendingDeleteIDs.count == 1,
+           let item = vm.tendieItems.first(where: { pendingDeleteIDs.contains($0.id) }) {
+            return "Delete \"\(item.name)\"?"
+        }
+        return "Delete \(pendingDeleteIDs.count) Wallpapers?"
+    }
+
+    private func requestDelete(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        pendingDeleteIDs = ids
+        showDeleteConfirm = true
     }
 
     private var selectedAll: Bool {
@@ -99,14 +115,28 @@ struct TendiesView: View {
                                 }
                             }
                             .font(.caption)
+
+                            Button(role: .destructive) {
+                                requestDelete(Set(vm.tendieItems.filter { $0.isSelected }.map(\.id)))
+                            } label: {
+                                Label("Delete Selected", systemImage: "trash")
+                                    .labelStyle(.iconOnly)
+                            }
+                            .font(.caption)
+                            .buttonStyle(.borderless)
+                            .disabled(selectedCount == 0)
+                            .accessibilityLabel("Delete \(selectedCount) selected wallpapers")
                         }
 
                         ForEach($vm.tendieItems) { $item in
                             TendieRowView(item: $item) {
                                 selectedDetailItem = item
                             } onDelete: {
-                                vm.deleteTendie(item: item)
+                                requestDelete([item.id])
                             }
+                        }
+                        .onDelete { offsets in
+                            requestDelete(Set(offsets.map { vm.tendieItems[$0].id }))
                         }
                     } header: {
                         Text("Wallpapers Gallery")
@@ -218,6 +248,21 @@ struct TendiesView: View {
                         await vm.importTendieFiles(urls: urls)
                     }
                 }
+            }
+            .confirmationDialog(
+                deleteConfirmTitle,
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    vm.deleteTendies(ids: pendingDeleteIDs)
+                    pendingDeleteIDs = []
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteIDs = []
+                }
+            } message: {
+                Text("The .tendies file will be removed from the app's library. Wallpapers already applied to PosterBoard are not affected.")
             }
             .sheet(item: $selectedDetailItem) { item in
                 TendieDetailSheet(item: item)

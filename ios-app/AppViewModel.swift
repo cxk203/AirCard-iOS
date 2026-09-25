@@ -1143,9 +1143,34 @@ final class AppViewModel: ObservableObject {
     }
 
     func deleteTendie(item: TendieItem) {
-        try? FileManager.default.removeItem(at: item.fileURL)
-        tendieItems.removeAll(where: { $0.id == item.id })
+        deleteTendies(ids: [item.id])
+    }
+
+    /// Removes wallpapers from the library, including the stored copy in Documents/Tendies
+    /// and any original dropped into the Documents root (otherwise the next scan re-imports it).
+    func deleteTendies(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        let fm = FileManager.default
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        var failedNames: [String] = []
+
+        for item in tendieItems where ids.contains(item.id) {
+            let candidates = [item.fileURL, docs.appendingPathComponent(item.fileName)]
+            for url in candidates where fm.fileExists(atPath: url.path) {
+                do {
+                    try fm.removeItem(at: url)
+                } catch {
+                    failedNames.append(item.fileName)
+                }
+            }
+        }
+
+        tendieItems.removeAll(where: { ids.contains($0.id) })
         saveTendieItems()
+
+        if !failedNames.isEmpty {
+            errorMessage = "Failed to delete: \(failedNames.joined(separator: ", "))"
+        }
     }
 
     func autoDetectPosterBoardContainer(silent: Bool = false) async {
